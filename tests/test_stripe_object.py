@@ -28,3 +28,10 @@ class StripeObjectExceptionsTest(TestCase):
         with self.assertRaises(NotImplementedError):
             MissingObjToRecord.create_from_stripe_object({})
 
+
+    def test_object_to_customer_none(self):
+        a = StripeCharge.object_to_customer(None, {})
+        self.assertEqual(a, None)
+
+        a = StripeCharge.object_to_customer(None, {'customer': None})
+        self.assertEqual(a, None)

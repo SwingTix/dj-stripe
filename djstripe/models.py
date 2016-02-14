@@ -616,7 +616,7 @@ class InvoiceItem(TimeStampedModel):
 class Charge(StripeCharge):
     stripe_api_name = "Charge"
 
-    customer = models.ForeignKey(Customer, related_name="charges")
+    customer = models.ForeignKey(Customer, related_name="charges", null=True)
     invoice = models.ForeignKey(Invoice, null=True, related_name="charges")
 
     objects = ChargeManager()
