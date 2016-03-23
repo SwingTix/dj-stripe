@@ -401,6 +401,67 @@ class StripeInvoice(StripeObject):
             setattr(self, attr, value)
 
 
+class StripeBalanceTransaction(StripeObject):
+    class Meta:
+        abstract = True
+    
+    stripe_api_name = "BalanceTransaction"
+
+    amount = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    fee = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    net = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    stripe_created = models.DateTimeField()
+    source = models.CharField(max_length=50, blank=True)
+    description = models.TextField(blank=True)
+    application_fee = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    stripe_fee = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+
+    @classmethod
+    def stripe_object_to_record(cls, data):
+        result = {
+            'stripe_id': data["id"],
+            "amount": data["amount"] / decimal.Decimal("100"),
+            "fee": data["fee"] / decimal.Decimal("100"),
+            "net": data["net"] / decimal.Decimal("100"),
+            "stripe_created": convert_tstamp(data, "created"),
+            "source": data.get("source", ""),
+            "description": data.get("description", ""),
+        }
+
+        for f in data['fee_details']:
+            if f['type'] == 'application_fee':
+                result['application_fee'] = f['amount'] / decimal.Decimal("100")
+            if f['type'] == 'stripe_fee':
+                result['stripe_fee'] = f['amount'] / decimal.Decimal("100")
+
+        return result
+
+class StripeRefund(StripeObject):
+    class Meta:
+        abstract = True
+    
+    stripe_api_name = "Refund"
+
+    amount = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    balance_transaction = models.CharField(max_length=50, blank=True, null=True)
+    charge = models.CharField(max_length=50, blank=True)
+    stripe_created = models.DateTimeField()
+    reason = models.CharField(max_length=20, blank=True, null=True)
+
+    @classmethod
+    def stripe_object_to_record(cls, data):
+        result = {
+            'stripe_id': data["id"],
+            "amount": data["amount"] / decimal.Decimal("100"),
+            "balance_transaction": data.get("balance_transaction", ""),
+            "charge": data.get("charge", ""),
+            "stripe_created": convert_tstamp(data, "created"),
+            "reason": data.get("reason", ""),
+        }
+
+        return result
+
+
 class StripeCharge(StripeObject):
     class Meta:
         abstract = True
@@ -419,6 +480,7 @@ class StripeCharge(StripeObject):
     fee = models.DecimalField(decimal_places=2, max_digits=7, null=True)
     receipt_sent = models.BooleanField(default=False)
     charge_created = models.DateTimeField(null=True, blank=True)
+    balance_transaction = models.CharField(max_length=50, blank=True, null=True)
 
     def str_parts(self):
         return [
@@ -485,16 +547,22 @@ class StripeCharge(StripeObject):
     def stripe_object_to_record(cls, data):
         result = {
             "stripe_id": data["id"],
-            "card_last_4": data["card"]["last4"],
-            "card_kind": data["card"]["type"],
             "amount": (data["amount"] / decimal.Decimal("100")),
             "paid": data["paid"],
             "refunded": data["refunded"],
             "captured": data["captured"],
-            "fee": (data["fee"] / decimal.Decimal("100")),
             "disputed": data["dispute"] is not None,
             "charge_created": convert_tstamp(data, "created"),
+            "balance_transaction": data["balance_transaction"],
         }
+        if "card" in data:
+            result.update({
+                "card_last_4": data["card"]["last4"],
+                "card_kind": data["card"]["type"],
+            })
+        if "fee" in data:
+            result["fee"] = (data["fee"] / decimal.Decimal("100"))
+
         if data.get("description"):
             result["description"] = data["description"]
         if data.get("amount_refunded"):
@@ -508,6 +576,33 @@ class StripeCharge(StripeObject):
         for attr, value in data.items():
             setattr(self, attr, value)
 
+
+class StripeApplicationFee(StripeObject):
+    class Meta:
+        abstract = True
+    
+    stripe_api_name = "ApplicationFee"
+
+    account = models.CharField(max_length=50, blank=True)
+    amount = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    amount_refunded = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    balance_transaction = models.CharField(max_length=50, blank=True, null=True)
+    charge = models.CharField(max_length=50, blank=True)
+    stripe_created = models.DateTimeField()
+
+    @classmethod
+    def stripe_object_to_record(cls, data):
+        result = {
+            'stripe_id': data["id"],
+            "account": data["account"],
+            "amount": data["amount"] / decimal.Decimal("100"),
+            "amount_refunded": data["amount_refunded"] / decimal.Decimal("100"),
+            "balance_transaction": data["balance_transaction"],
+            "charge": data["charge"],
+            "stripe_created": convert_tstamp(data, "created"),
+        }
+
+        return result
 
 INTERVALS = (
     ('week', 'Week',),

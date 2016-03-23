@@ -27,13 +27,28 @@ from .managers import CustomerManager, ChargeManager, TransferManager
 from .signals import WEBHOOK_SIGNALS
 from .signals import subscription_made, cancelled, card_changed
 from .signals import webhook_processing_error
-from .stripe_objects import StripeEvent, StripeTransfer, StripeCustomer, StripeInvoice, StripeCharge, StripePlan, convert_tstamp
+from .stripe_objects import StripeApplicationFee
+from .stripe_objects import StripeBalanceTransaction
+from .stripe_objects import StripeCharge
+from .stripe_objects import StripeCustomer
+from .stripe_objects import StripeEvent
+#from .stripe_objects import StripeApplicationFeeRefund
+from .stripe_objects import StripeInvoice
+from .stripe_objects import StripePlan
+from .stripe_objects import StripeRefund
+from .stripe_objects import StripeTransfer
+from .stripe_objects import convert_tstamp
 
 logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 stripe.api_version = getattr(settings, "STRIPE_API_VERSION", "2012-11-07")
 
+def currency_to_api(amount):
+    return int(amount * 100)
+
+def currency_from_api(amount):
+    return amount / decimal.Decimal("100"),
 
 @python_2_unicode_compatible
 class EventProcessingException(TimeStampedModel):
@@ -613,6 +628,12 @@ class InvoiceItem(TimeStampedModel):
         return djstripe_settings.PAYMENTS_PLANS[self.plan]["name"]
 
 
+class BalanceTransaction(StripeBalanceTransaction):
+    stripe_api_name = "BalanceTransaction"
+
+class Refund(StripeRefund):
+    stripe_api_name = "Refund"
+
 class Charge(StripeCharge):
     stripe_api_name = "Charge"
 
@@ -626,8 +647,27 @@ class Charge(StripeCharge):
         Refund an existing charge https://stripe.com/docs/api#create_refund
         Stripe Connect information https://stripe.com/docs/connect/payments-fees#issuing-refunds
         """
-        refunded_charge = super(Charge, self).refund(amount, **kwargs)
-        return Charge.sync_from_stripe_data(refunded_charge)
+
+        assert amount <= self.amount - self.refunded, "amount {} more than original amount minus previous refunds ({} - {})".format(amount, self.amount, self.refunded)
+
+        #Refund.create()
+        refund_response = Refund.api_create(
+            charge=self.stripe_id,
+            amount=currency_to_api(amount),
+            **kwargs
+            )
+        logger.info("refund_response is: {}".format(repr(refund_response)))
+
+        refund = Refund.create_from_stripe_object(refund_response)
+        refund.save()
+
+        updated_charge_data = self.api_retrieve()
+        updated_charge = Charge.sync_from_stripe_data(updated_charge_data)
+
+        return refund
+
+    def get_refunds(self):
+        return Refund.objects.filter(charge=self.stripe_id).all()
 
     def capture(self):
         """
@@ -681,6 +721,12 @@ class Charge(StripeCharge):
             self.receipt_sent = num_sent > 0
             self.save()
 
+
+class ApplicationFee(StripeApplicationFee):
+    stripe_api_name = "ApplicationFee"
+
+#class ApplicationFeeRefund(StripeApplicationFeeRefund):
+#    pass
 
 INTERVALS = (
     ('week', 'Week',),
