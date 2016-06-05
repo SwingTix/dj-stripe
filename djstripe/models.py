@@ -32,7 +32,7 @@ from .stripe_objects import StripeBalanceTransaction
 from .stripe_objects import StripeCharge
 from .stripe_objects import StripeCustomer
 from .stripe_objects import StripeEvent
-#from .stripe_objects import StripeApplicationFeeRefund
+from .stripe_objects import StripeApplicationFeeRefund
 from .stripe_objects import StripeInvoice
 from .stripe_objects import StripePlan
 from .stripe_objects import StripeRefund
@@ -722,11 +722,34 @@ class Charge(StripeCharge):
             self.save()
 
 
+class ApplicationFeeRefund(StripeApplicationFeeRefund):
+    stripe_api_name = "ApplicationFeeRefund"
+
+    def __repr__(self):
+        return "<ApplicationFeeRefund amount={amount}, stripe_id={stripe_id}, fee_id={fee_id}>".format(amount=self.amount, stripe_id=self.stripe_id, fee_id=self.fee)
+    def __str__(self):
+        return "<ApplicationFeeRefund amount={amount}, stripe_id={stripe_id}, fee_id={fee_id}>".format(amount=self.amount, stripe_id=self.stripe_id, fee_id=self.fee)
+
 class ApplicationFee(StripeApplicationFee):
     stripe_api_name = "ApplicationFee"
 
-#class ApplicationFeeRefund(StripeApplicationFeeRefund):
-#    pass
+    def get_refunds(self):
+        """ retrieve a list of (previous saved) ApplicationFeeRefunds
+        """
+        return ApplicationFeeRefund.objects.filter(fee=self.stripe_id).order_by('stripe_created').all()
+
+    def get_new_refunds(self):
+        """ retrieve a list of (unsaved) ApplicationFeeRefunds that haven't
+        been recorded yet.
+        """
+        recorded_ids = [ o.stripe_id for o in self.get_refunds() ]
+        refunds = self.api_retrieve_refunds()
+        new_refunds = [ o for o in refunds if o.stripe_id not in recorded_ids ]
+
+        r = [ ApplicationFeeRefund.create_from_stripe_object(o) for o in new_refunds ]
+
+        return r
+
 
 INTERVALS = (
     ('week', 'Week',),
