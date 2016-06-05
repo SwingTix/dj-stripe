@@ -577,6 +577,63 @@ class StripeCharge(StripeObject):
             setattr(self, attr, value)
 
 
+class StripeApplicationFeeRefund(StripeObject):
+    #"""Caution: the stripe python library doesn't actually show
+    #ApplicationFeeRefund objects being used directly.  Instead it only shows
+    #them as children of ApplicationFees.
+    #"""
+
+    class Meta:
+        abstract = True
+
+    stripe_api_name = "ApplicationFeeRefund"
+
+    @classmethod
+    def api(cls):
+        raise NotImplemented("The stripe library doesn't support direct access to the ApplicationFeeRefund object")
+        # it's technically stripe.resource.ApplicationFeeRefund, but things
+        # like retrieve() don't directly work--you're supposed to go through
+        # stripe.ApplicationFee.
+
+    # START HERE: Find an appropriate way to sync new refunds given an
+    # application and make them available for saving.
+
+    def api_retrieve(self):
+        """
+        Implement very commonly used API function 'retrieve'
+        """
+        import logging
+        logging.warning("refund retrieving.. ")
+        fee = stripe.ApplicationFee.retrieve(self.fee)
+        results = fee.refunds.retrieve(self.stripe_id)
+        logging.warning("refund retrieving.. got {} ".format(results))
+        return results
+
+    amount = models.DecimalField(decimal_places=2, max_digits=7, null=True)
+    balance_transaction = models.CharField(max_length=50, blank=True, null=True)
+    fee = models.CharField(max_length=50, blank=True)
+    stripe_created = models.DateTimeField()
+
+    @classmethod
+    def stripe_object_to_record(cls, data):
+        result = {
+            'stripe_id': data["id"],
+            "amount": data["amount"] / decimal.Decimal("100"),
+            "balance_transaction": data.get("balance_transaction", ""),
+            "fee": data.get("fee", ""),
+            "stripe_created": convert_tstamp(data, "created"),
+        }
+        import logging
+        logging.warning("I have {}".format(result))
+
+        return result
+
+    
+    def __repr__(self):
+        return "<StripeApplicationFeeRefund amount={amount}, stripe_id={stripe_id}, fee_id={fee_id}>".format(amount=self.amount, stripe_id=self.stripe_id, fee_id=self.fee)
+    def __str__(self):
+        return "<StripeApplicationFeeRefund amount={amount}, stripe_id={stripe_id}, fee_id={fee_id}>".format(amount=self.amount, stripe_id=self.stripe_id, fee_id=self.fee)
+
 class StripeApplicationFee(StripeObject):
     class Meta:
         abstract = True
@@ -587,8 +644,15 @@ class StripeApplicationFee(StripeObject):
     amount = models.DecimalField(decimal_places=2, max_digits=7, null=True)
     amount_refunded = models.DecimalField(decimal_places=2, max_digits=7, null=True)
     balance_transaction = models.CharField(max_length=50, blank=True, null=True)
-    charge = models.CharField(max_length=50, blank=True)
+    charge = models.CharField(max_length=50, blank=True) #TODO: indexme!
     stripe_created = models.DateTimeField()
+
+    def api_retrieve_refunds(self):
+        import logging
+        logging.warning("refund retrieving all.. ")
+        return stripe.ApplicationFee.retrieve(self.stripe_id).refunds.list()
+        
+        
 
     @classmethod
     def stripe_object_to_record(cls, data):
