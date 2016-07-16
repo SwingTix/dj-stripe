@@ -628,9 +628,9 @@ class StripeApplicationFeeRefund(StripeObject):
 
         return result
 
-    
     def __repr__(self):
         return "<StripeApplicationFeeRefund amount={amount}, stripe_id={stripe_id}, fee_id={fee_id}>".format(amount=self.amount, stripe_id=self.stripe_id, fee_id=self.fee)
+
     def __str__(self):
         return "<StripeApplicationFeeRefund amount={amount}, stripe_id={stripe_id}, fee_id={fee_id}>".format(amount=self.amount, stripe_id=self.stripe_id, fee_id=self.fee)
 
@@ -651,8 +651,6 @@ class StripeApplicationFee(StripeObject):
         import logging
         logging.warning("refund retrieving all.. ")
         return stripe.ApplicationFee.retrieve(self.stripe_id).refunds.list()
-        
-        
 
     @classmethod
     def stripe_object_to_record(cls, data):

@@ -749,7 +749,7 @@ class ApplicationFee(StripeApplicationFee):
         r = [ ApplicationFeeRefund.create_from_stripe_object(o) for o in new_refunds ]
 
         return r
-        
+
 
 INTERVALS = (
     ('week', 'Week',),
