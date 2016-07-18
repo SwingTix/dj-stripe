@@ -555,10 +555,10 @@ class StripeCharge(StripeObject):
             "charge_created": convert_tstamp(data, "created"),
             "balance_transaction": data["balance_transaction"],
         }
-        if "card" in data:
+        if "source" in data:
             result.update({
-                "card_last_4": data["card"]["last4"],
-                "card_kind": data["card"]["type"],
+                "card_last_4": data["source"]["last4"],
+                "card_kind": data["source"]["brand"],
             })
         if "fee" in data:
             result["fee"] = (data["fee"] / decimal.Decimal("100"))
